@@ -19,7 +19,12 @@ htmlcov/
 .ruff_cache/
 
 *.log
+
+# State files (old location)
 .miyakowasure-state.json
+
+# State directory (new location)
+.ryokan-check/
 
 .direnv/
 result
