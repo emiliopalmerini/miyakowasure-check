@@ -1,21 +1,31 @@
-"""Playwright-based scraper for Yadosys booking system."""
+"""Playwright-based scraper for Yadosys booking system (Miyakowasure)."""
+
+from __future__ import annotations
 
 import asyncio
 import re
-from datetime import date, datetime
+from datetime import datetime
+from typing import TYPE_CHECKING
 
 from playwright.async_api import Browser, Page, async_playwright
 
-from miyakowasure_check.config import PLAN_LIST_URL, Config
-from miyakowasure_check.models import CheckResult, RoomAvailability, RoomType
+from ryokan_check.domain.models import CheckResult, RoomAvailability
+from ryokan_check.domain.property import Property
+from ryokan_check.properties.miyakowasure.rooms import MiyakowasureRoom
+
+if TYPE_CHECKING:
+    from ryokan_check.config import Config
+
+PLAN_LIST_URL = "https://www3.yadosys.com/reserve/en/plan/list/147/fgeggchbebhjhbeogefegpdn/all"
 
 
 class YadosysScraper:
     """Scrapes availability from Yadosys booking system."""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: "Config") -> None:
         self.config = config
         self._browser: Browser | None = None
+        self._playwright = None
 
     async def __aenter__(self) -> "YadosysScraper":
         self._playwright = await async_playwright().start()
@@ -25,14 +35,20 @@ class YadosysScraper:
     async def __aexit__(self, *args) -> None:
         if self._browser:
             await self._browser.close()
-        await self._playwright.stop()
+        if self._playwright:
+            await self._playwright.stop()
 
     async def check_availability(self) -> CheckResult:
         """Check availability for configured dates and rooms."""
         check_time = datetime.now().isoformat()
 
         if not self._browser:
-            return CheckResult(check_time=check_time, rooms_checked=[], error="Browser not initialized")
+            return CheckResult(
+                property=Property.MIYAKOWASURE,
+                check_time=check_time,
+                rooms_checked=[],
+                error="Browser not initialized",
+            )
 
         try:
             page = await self._browser.new_page()
@@ -47,10 +63,19 @@ class YadosysScraper:
             rooms = await self._parse_availability(page)
             await page.close()
 
-            return CheckResult(check_time=check_time, rooms_checked=rooms)
+            return CheckResult(
+                property=Property.MIYAKOWASURE,
+                check_time=check_time,
+                rooms_checked=rooms,
+            )
 
         except Exception as e:
-            return CheckResult(check_time=check_time, rooms_checked=[], error=str(e))
+            return CheckResult(
+                property=Property.MIYAKOWASURE,
+                check_time=check_time,
+                rooms_checked=[],
+                error=str(e),
+            )
 
     async def _fill_search_form(self, page: Page) -> None:
         """Fill in the search form with target dates and guest count."""
@@ -102,19 +127,21 @@ class YadosysScraper:
     async def _parse_availability(self, page: Page) -> list[RoomAvailability]:
         """Parse room availability from the results page."""
         results: list[RoomAvailability] = []
-        rooms_to_check = self.config.rooms_to_check
+        rooms_to_check = self.config.rooms_to_check(Property.MIYAKOWASURE)
 
         content = await page.content()
 
-        for room_type in rooms_to_check:
-            availability = await self._check_room_availability(page, content, room_type)
+        for room in rooms_to_check:
+            if not isinstance(room, MiyakowasureRoom):
+                continue
+            availability = await self._check_room_availability(page, content, room)
             if availability:
                 results.append(availability)
 
         return results
 
     async def _check_room_availability(
-        self, page: Page, content: str, room_type: RoomType
+        self, page: Page, content: str, room_type: MiyakowasureRoom
     ) -> RoomAvailability | None:
         """Check availability for a specific room type."""
         room_name = room_type.display_name
@@ -127,8 +154,6 @@ class YadosysScraper:
         room_section = page.locator(f'[href*="{room_id}"], [data-room*="{room_id}"]').first
         if await room_section.count() == 0:
             room_section = page.locator(f'text="{room_name}"').first
-
-        has_room = await room_section.count() > 0
 
         unavailable_markers = ["×", "満室", "sold out", "unavailable", "no vacancy"]
         available_markers = ["○", "◎", "空室", "available", "vacancy"]
@@ -173,7 +198,8 @@ class YadosysScraper:
                 is_available = True
 
         return RoomAvailability(
-            room_type=room_type,
+            property=Property.MIYAKOWASURE,
+            room=room_type,
             check_in=self.config.check_in_date,
             check_out=self.config.check_out_date,
             available=is_available,
@@ -182,7 +208,7 @@ class YadosysScraper:
         )
 
 
-async def check_availability(config: Config) -> CheckResult:
+async def check_availability(config: "Config") -> CheckResult:
     """Convenience function to check availability."""
     async with YadosysScraper(config) as scraper:
         return await scraper.check_availability()
