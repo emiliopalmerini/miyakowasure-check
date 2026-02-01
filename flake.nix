@@ -1,5 +1,5 @@
 {
-  description = "Miyakowasure Ryokan Availability Checker";
+  description = "Ryokan Availability Checker - Monitor room availability at Japanese ryokan";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -22,9 +22,9 @@
 
         pythonEnv = python.withPackages pythonDeps;
 
-        miyakowasure-check = pkgs.stdenv.mkDerivation {
-          pname = "miyakowasure-check";
-          version = "0.1.0";
+        ryokan-check = pkgs.stdenv.mkDerivation {
+          pname = "ryokan-check";
+          version = "0.2.0";
 
           src = ./.;
 
@@ -39,19 +39,19 @@
           ];
 
           installPhase = ''
-            mkdir -p $out/lib/miyakowasure-check
-            cp -r src/miyakowasure_check $out/lib/miyakowasure-check/
+            mkdir -p $out/lib/ryokan-check
+            cp -r src/ryokan_check $out/lib/ryokan-check/
 
             mkdir -p $out/bin
-            makeWrapper ${pythonEnv}/bin/python $out/bin/miyakowasure-check \
-              --set PYTHONPATH "$out/lib/miyakowasure-check" \
+            makeWrapper ${pythonEnv}/bin/python $out/bin/ryokan-check \
+              --set PYTHONPATH "$out/lib/ryokan-check" \
               --set PLAYWRIGHT_BROWSERS_PATH "${pkgs.playwright-driver.browsers}" \
               --set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD "1" \
-              --add-flags "-m miyakowasure_check.cli"
+              --add-flags "-m ryokan_check.cli"
           '';
 
           meta = with pkgs.lib; {
-            description = "CLI tool to monitor room availability at Natsuse Onsen Miyakowasure ryokan";
+            description = "CLI tool to monitor room availability at Japanese ryokan (Miyakowasure, Miyamaso Takamiya)";
             license = licenses.mit;
             maintainers = [ ];
             platforms = platforms.unix;
@@ -61,13 +61,13 @@
       in
       {
         packages = {
-          default = miyakowasure-check;
-          miyakowasure-check = miyakowasure-check;
+          default = ryokan-check;
+          ryokan-check = ryokan-check;
         };
 
         apps.default = {
           type = "app";
-          program = "${miyakowasure-check}/bin/miyakowasure-check";
+          program = "${ryokan-check}/bin/ryokan-check";
         };
 
         devShells.default = pkgs.mkShell {
@@ -77,7 +77,7 @@
           ];
 
           shellHook = ''
-            echo "Miyakowasure dev shell"
+            echo "Ryokan-check dev shell"
             echo "Run: uv sync && source .venv/bin/activate"
           '';
         };
