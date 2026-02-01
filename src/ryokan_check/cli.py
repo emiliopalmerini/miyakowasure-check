@@ -145,7 +145,10 @@ async def _check_single_property(
             if room.spots_left:
                 log(f"    Spots left: {room.spots_left}")
 
-            if notifier and state.should_notify(room):
+            # Skip notification if price is TBD (avoids spam from incomplete data)
+            if not room.price_per_person:
+                log("    [dim]Price TBD - skipping notification[/dim]")
+            elif notifier and state.should_notify(room):
                 success = await notifier.send(room, prop_config)
                 if success:
                     state.mark_notified(room)
