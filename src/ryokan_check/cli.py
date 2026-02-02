@@ -12,7 +12,7 @@ from rich.table import Table
 from ryokan_check.config import Config
 from ryokan_check.domain.models import CheckResult
 from ryokan_check.domain.property import Property, get_property_config
-from ryokan_check.notifier import NtfyNotifier
+from ryokan_check.notifier import EmailConfig, EmailNotifier
 from ryokan_check.state import NotificationState, migrate_old_state_file
 
 # Import property modules to trigger registration
@@ -88,14 +88,14 @@ async def run_check_loop(config: Config) -> None:
         state.load()
         states[prop] = state
 
-    notifier = NtfyNotifier(config.ntfy_topic) if config.ntfy_topic else None
+    notifier = EmailNotifier(config.email_config) if config.email_config else None
 
     log(f"Starting availability checker for {config.check_in_date} ({config.nights} night(s))")
     log(f"Properties: {', '.join(p.value for p in config.properties)}")
     log(f"Guests: {config.guests}")
     log(f"Check interval: {config.check_interval_minutes} minutes")
     if notifier:
-        log(f"Notifications via ntfy.sh topic: {config.ntfy_topic}")
+        log(f"Notifications via email to: {config.email_config.to_address}")
     else:
         log("[yellow]No notification method configured - will only log to console[/yellow]")
 
@@ -119,7 +119,7 @@ async def _check_single_property(
     config: Config,
     prop: Property,
     state: NotificationState,
-    notifier: NtfyNotifier | None,
+    notifier: EmailNotifier | None,
 ) -> CheckResult:
     """Check availability for a single property."""
     prop_config = get_property_config(prop)
@@ -252,14 +252,62 @@ def check(
             help="Check interval in minutes (minimum 15)",
         ),
     ] = 30,
-    ntfy_topic: Annotated[
+    smtp_host: Annotated[
         str | None,
         typer.Option(
-            "--ntfy-topic",
-            help="ntfy.sh topic for notifications",
-            envvar="NTFY_TOPIC",
+            "--smtp-host",
+            help="SMTP server hostname",
+            envvar="SMTP_HOST",
         ),
     ] = None,
+    smtp_port: Annotated[
+        int,
+        typer.Option(
+            "--smtp-port",
+            help="SMTP server port",
+            envvar="SMTP_PORT",
+        ),
+    ] = 587,
+    smtp_user: Annotated[
+        str | None,
+        typer.Option(
+            "--smtp-user",
+            help="SMTP username",
+            envvar="SMTP_USER",
+        ),
+    ] = None,
+    smtp_password: Annotated[
+        str | None,
+        typer.Option(
+            "--smtp-password",
+            help="SMTP password",
+            envvar="SMTP_PASSWORD",
+        ),
+    ] = None,
+    email_from: Annotated[
+        str | None,
+        typer.Option(
+            "--email-from",
+            help="Sender email address",
+            envvar="EMAIL_FROM",
+        ),
+    ] = None,
+    email_to: Annotated[
+        str | None,
+        typer.Option(
+            "--email-to",
+            help="Recipient email address",
+            envvar="EMAIL_TO",
+        ),
+    ] = None,
+    smtp_tls: Annotated[
+        bool,
+        typer.Option(
+            "--smtp-tls/--no-smtp-tls",
+            help="Use STARTTLS for SMTP connection",
+            envvar="SMTP_TLS",
+        ),
+    ] = True,
     state_dir: Annotated[
         Path | None,
         typer.Option(
@@ -305,6 +353,19 @@ def check(
                     raise
                 continue
 
+    # Build email config if SMTP settings are provided
+    email_config = None
+    if smtp_host and smtp_user and smtp_password and email_from and email_to:
+        email_config = EmailConfig(
+            smtp_host=smtp_host,
+            smtp_port=smtp_port,
+            smtp_user=smtp_user,
+            smtp_password=smtp_password,
+            from_address=email_from,
+            to_address=email_to,
+            use_tls=smtp_tls,
+        )
+
     try:
         config = Config(
             check_in_date=check_in_date,
@@ -313,7 +374,7 @@ def check(
             guests=guests,
             room_filter=room_filter,
             check_interval_minutes=interval,
-            ntfy_topic=ntfy_topic,
+            email_config=email_config,
             state_dir=state_dir or Path.home() / ".ryokan-check",
             headless=headless,
         )

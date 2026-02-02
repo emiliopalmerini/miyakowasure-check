@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ryokan_check.domain.property import Property, get_property_config
+from ryokan_check.notifier import EmailConfig
 
 if TYPE_CHECKING:
     from ryokan_check.ports.room import RoomInfo
@@ -24,7 +25,7 @@ class Config:
     guests: int = 2
     room_filter: dict[Property, list["RoomInfo"]] = field(default_factory=dict)
     check_interval_minutes: int = 30
-    ntfy_topic: str | None = None
+    email_config: EmailConfig | None = None
     state_dir: Path = field(default_factory=lambda: DEFAULT_STATE_DIR)
     headless: bool = True
 

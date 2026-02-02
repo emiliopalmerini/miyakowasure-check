@@ -33,7 +33,7 @@ This is a CLI tool that monitors room availability at Japanese ryokan. It suppor
 - **Miyakowasure** (Natsuse Onsen) via Yadosys booking system
 - **Miyamaso Takamiya** (Zao Onsen) via 489ban.net booking system
 
-It uses Playwright to scrape booking systems and sends notifications via ntfy.sh when rooms become available.
+It uses Playwright to scrape booking systems and sends email notifications via SMTP when rooms become available.
 
 ### Directory Structure
 
@@ -41,7 +41,7 @@ It uses Playwright to scrape booking systems and sends notifications via ntfy.sh
 src/ryokan_check/
 ├── cli.py                    # Typer CLI with check/rooms commands
 ├── config.py                 # Multi-property configuration
-├── notifier.py               # NtfyNotifier for push notifications
+├── notifier.py               # EmailNotifier for SMTP notifications
 ├── state.py                  # Per-property notification state (24h cooldown)
 ├── ports/                    # Interfaces (hexagonal architecture)
 │   ├── room.py               # RoomInfo protocol
@@ -63,7 +63,7 @@ src/ryokan_check/
 1. CLI parses args into `Config` with property selection
 2. For each property, the appropriate scraper checks availability
 3. For each available room, `NotificationState` checks 24h cooldown
-4. `NtfyNotifier` sends alert with property-aware title
+4. `EmailNotifier` sends alert email with property-aware subject
 5. State saved to `~/.ryokan-check/{property}-state.json`
 
 ### Room Types
@@ -79,14 +79,26 @@ src/ryokan_check/
 ### CLI Examples
 
 ```bash
-# Check all properties
+# Check all properties (single check)
 ryokan-check check --date 2026-03-15 --once
 
 # Check specific property
 ryokan-check check --property miyamaso --date 2026-03-15 --room hinakura
 
-# Monitor with notifications
-ryokan-check check --property all --date 2026-03-15 --ntfy-topic my-topic
+# Monitor with email notifications
+ryokan-check check --property all --date 2026-03-15 \
+  --smtp-host smtp.gmail.com --smtp-port 587 \
+  --smtp-user user@gmail.com --smtp-password "app-password" \
+  --email-from user@gmail.com --email-to user@gmail.com
+
+# Using environment variables for email config
+export SMTP_HOST=smtp.gmail.com
+export SMTP_PORT=587
+export SMTP_USER=user@gmail.com
+export SMTP_PASSWORD="app-password"
+export EMAIL_FROM=user@gmail.com
+export EMAIL_TO=user@gmail.com
+ryokan-check check --date 2026-03-15
 
 # List rooms for a property
 ryokan-check rooms --property miyamaso
