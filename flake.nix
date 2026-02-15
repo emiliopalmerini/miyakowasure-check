@@ -18,6 +18,7 @@
           httpx
           typer
           rich
+          aiosmtplib
         ];
 
         pythonEnv = python.withPackages pythonDeps;
